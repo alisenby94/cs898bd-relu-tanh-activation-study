@@ -2,11 +2,11 @@
 """
 CS898BD Assignment 2 - Question 2: Activation Function Experiments
 
-This script implements a 4-layer CNN to compare ReLU vs Tanh activation functions
-on a custom Tiny ImageNet dataset. The model trains until reaching ≤25% training error
-and generates comparative analysis plots.
+This script implements an experimental 4-layer CNN to compare ReLU vs Tanh activation functions
+on the CIFAR-10 dataset. The model trains until reaching ≤25% training error and generates
+comparative analysis plots.
 
-Author: CS898BD Student
+Author: Andrew Lisenby
 Date: October 2025
 """
 
@@ -14,13 +14,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
+import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle
 import time
 import os
-from PIL import Image
 from tqdm import tqdm
 
 
@@ -40,103 +39,75 @@ def setup_environment():
     return device
 
 
-class TinyImageNetDataset(Dataset):
-    """Custom Dataset class for Tiny ImageNet data"""
+def load_cifar10_dataset():
+    """Load CIFAR-10 dataset with standard normalization values"""
+    print("Loading CIFAR-10 dataset...")
     
-    def __init__(self, data, transform=None):
-        self.data = data
-        self.transform = transform
-        
-        # Create label mapping (labels might not be 0-99)
-        unique_labels = sorted(list(set([item['label'] for item in data])))
-        self.label_map = {label: idx for idx, label in enumerate(unique_labels)}
-        
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        image = item['image']  # PIL Image
-        label = self.label_map[item['label']]  # Map to 0-99
-        
-        if self.transform:
-            image = self.transform(image)
-            
-        return image, label
-
-
-def load_dataset():
-    """Load the preprocessed dataset from Question 1"""
-    print("Loading preprocessed dataset from Question 1...")
-    
-    try:
-        with open('data/processed/train_split.pkl', 'rb') as f:
-            train_data = pickle.load(f)
-        
-        with open('data/processed/test_split.pkl', 'rb') as f:
-            test_data = pickle.load(f)
-            
-        with open('data/processed/valid_split.pkl', 'rb') as f:
-            valid_data = pickle.load(f)
-            
-        with open('data/processed/selected_classes.pkl', 'rb') as f:
-            selected_classes = pickle.load(f)
-            
-        print(f"Dataset loaded successfully!")
-        print(f"  Train samples: {len(train_data)}")
-        print(f"  Test samples: {len(test_data)}")
-        print(f"  Validation samples: {len(valid_data)}")
-        print(f"  Classes: {len(selected_classes)}")
-        
-        return train_data, test_data, valid_data, selected_classes
-        
-    except FileNotFoundError as e:
-        print(f"Error: Could not find dataset files. Please run 01_dataset_preparation.ipynb first.")
-        raise e
-
-
-def create_data_loaders(train_data, test_data, valid_data, batch_size=64):
-    """Create PyTorch DataLoaders with proper transforms"""
-    
-    # Define transforms - convert grayscale to RGB to handle channel mismatch
+    # Define transforms for CIFAR-10 (32x32 images) using standard normalization
     train_transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.Lambda(lambda x: x.convert('RGB')),  # Ensure 3 channels
-        # transforms.RandomHorizontalFlip(),
+        # transforms.RandomHorizontalFlip(p=0.5),  # Data augmentation slowed down convergence with tanh
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], 
+                           std=[0.2023, 0.1994, 0.2010])  # Standard CIFAR-10 normalization
     ])
     
     test_transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.Lambda(lambda x: x.convert('RGB')),  # Ensure 3 channels
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], 
+                           std=[0.2023, 0.1994, 0.2010])  # Standard CIFAR-10 normalization
     ])
     
-    # Create datasets
-    train_dataset = TinyImageNetDataset(train_data, transform=train_transform)
-    test_dataset = TinyImageNetDataset(test_data, transform=test_transform)
-    valid_dataset = TinyImageNetDataset(valid_data, transform=test_transform)
+    # Download and create datasets with standard normalization
+    train_dataset = datasets.CIFAR10(root='./data', train=True, 
+                                   download=True, transform=train_transform)
+    test_dataset = datasets.CIFAR10(root='./data', train=False, 
+                                  download=True, transform=test_transform)
     
-    # Create data loaders
+    # CIFAR-10 classes
+    cifar10_classes = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
+                       'dog', 'frog', 'horse', 'ship', 'truck']
+    
+    print(f"CIFAR-10 dataset loaded successfully!")
+    print(f"  Train samples: {len(train_dataset)}")
+    print(f"  Test samples: {len(test_dataset)}")
+    print(f"  Classes: {len(cifar10_classes)}")
+    print(f"  Image size: 32x32x3")
+    print(f"  Using standard CIFAR-10 normalization")
+    
+    return train_dataset, test_dataset, cifar10_classes
+
+
+def create_data_loaders(train_dataset, test_dataset, batch_size=64, validation_split=0.1):
+    """Create PyTorch DataLoaders with train/validation split"""
+    
+    # Split training data into train and validation
+    train_size = len(train_dataset)
+    val_size = int(validation_split * train_size)
+    train_size = train_size - val_size
+    
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        train_dataset, [train_size, val_size], 
+        generator=torch.Generator().manual_seed(42)  # For reproducibility
+    )
+    
+    # Create data loaders (may need to adjust num_workers based on system)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    valid_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     
     print(f"Data loaders created!")
     print(f"  Batch size: {batch_size}")
-    print(f"  Train batches: {len(train_loader)}")
-    print(f"  Test batches: {len(test_loader)}")
-    print(f"  Validation batches: {len(valid_loader)}")
+    print(f"  Train samples: {len(train_dataset)} (batches: {len(train_loader)})")
+    print(f"  Validation samples: {len(val_dataset)} (batches: {len(valid_loader)})")
+    print(f"  Test samples: {len(test_dataset)} (batches: {len(test_loader)})")
     
     return train_loader, test_loader, valid_loader
 
 
 class SimpleCNN(nn.Module):
-    """4-Layer CNN with improved spatial preservation for Tiny ImageNet"""
+    """Modified 4-Layer CNN: conv1+bn1, conv2+bn2, conv3+bn3, conv4+bn4+pool4, fc1, fc2, fc3"""
     
-    def __init__(self, num_classes=100, activation='relu'):
+    def __init__(self, num_classes=10, activation='relu'):
         super(SimpleCNN, self).__init__()
         
         self.activation_type = activation
@@ -149,48 +120,59 @@ class SimpleCNN(nn.Module):
         else:
             raise ValueError(f"Unsupported activation: {activation}")
         
-        # REDESIGNED: Only 2 MaxPool operations - preserve much more spatial detail!
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)    # 64x64 -> 64x64
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)                   # 64x64 -> 32x32
-        
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)  # 32x32 -> 32x32
-        # NO pooling here - preserve spatial detail!
-        
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1) # 32x32 -> 32x32
-        # NO pooling here - preserve spatial detail!
-        
-        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1) # 32x32 -> 32x32
-        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)                   # 32x32 -> 16x16 (FINAL pool)
-        
+        # LARGER KERNEL ARCHITECTURE WITH BATCH NORMALIZATION: More spatial context + BN for stable training
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)    # 32x32 -> 32x32 (large receptive field!)
+        self.bn1 = nn.BatchNorm2d(32)
+
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)   # 32x32 -> 32x32 (medium kernel + no downsampling)
+        self.bn2 = nn.BatchNorm2d(64)
+
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)  # 32x32 -> 32x32 (medium spatial context)
+        self.bn3 = nn.BatchNorm2d(128)
+
+        self.conv4 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1) # 32x32 -> 32x32 (final downsampling)
+        self.bn4 = nn.BatchNorm2d(128)
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)  # 32x32 -> 16x16
+
         self.dropout = nn.Dropout(0.5)
         
-        # MUCH BETTER: 16x16 spatial size retains meaningful feature maps!
-        self.fc1 = nn.Linear(512 * 16 * 16, 2048)  # 16X more spatial information than 8x8!
-        self.fc2 = nn.Linear(2048, 512)
-        self.fc3 = nn.Linear(512, num_classes)
+        # LARGER: 32x32 final feature maps = 131,072 features (more spatial data for tanh!)
+        self.fc1 = nn.Linear(128 * 16 * 16, 512)  
+        self.fc2 = nn.Linear(512, 128)
+        self.fc3 = nn.Linear(128, num_classes)     # 10 classes for CIFAR-10
         
     def forward(self, x):
-        # REDESIGNED: Minimal spatial reduction - only 2 pools total
-        x = self.pool1(self.activation(self.conv1(x)))  # 64x64 -> 32x32
-        x = self.activation(self.conv2(x))              # 32x32 -> 32x32 (NO pool - preserve!)
-        x = self.activation(self.conv3(x))              # 32x32 -> 32x32 (NO pool - preserve!)
-        x = self.pool4(self.activation(self.conv4(x)))  # 32x32 -> 16x16 (final pool only)
-        
-        # Flatten for FC layers - much larger feature maps!
+        # Each conv layer followed by BN and activation. BN was necessary for tanh due to vanishing gradients.
+        # Final pooling to reduce feature map size for FC layers.
+        x = self.activation(self.bn1(self.conv1(x)))    # 32x32 -> 32x32 (large kernel + BN)  
+        x = self.activation(self.bn2(self.conv2(x)))    # 32x32 -> 32x32 (medium kernel + BN)
+        x = self.activation(self.bn3(self.conv3(x)))    # 32x32 -> 32x32 (small kernel + BN)
+        x = self.activation(self.bn4(self.conv4(x)))    # 32x32 -> 32x32 (small kernel + BN)
+        x = self.pool4(x)                              # 32x32 -> 16x16 (final pooling for manageable feature count)
+
+        # Flatten for FC layers
         x = x.view(x.size(0), -1)
         
         # FC layers with dropout
-        x = self.dropout(self.activation(self.fc1(x)))
-        x = self.dropout(self.activation(self.fc2(x)))
+        # This really slowed down training without doing much to improve tanh.
+        # x = self.dropout(self.activation(self.fc1(x)))
+        # x = self.dropout(self.activation(self.fc2(x)))
+
+        x = self.activation(self.fc1(x))
+        x = self.activation(self.fc2(x))
+        
+        # No activation on final layer
         x = self.fc3(x)
         
         return x
 
 
-def create_models(device, num_classes=100):
-    """Create ReLU and Tanh models"""
-    print("Creating CNN models...")
+def create_models(device, num_classes=10):
+    """Create ReLU and Tanh models for CIFAR-10"""
+    print("Creating CNN models for CIFAR-10...")
     
+    # Initialize each model with appropriate test activation function
+    # Move to relevant device
     model_relu = SimpleCNN(num_classes=num_classes, activation='relu').to(device)
     model_tanh = SimpleCNN(num_classes=num_classes, activation='tanh').to(device)
     
@@ -204,10 +186,16 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
     Train model until training error <= 25% or max epochs reached
     Returns: training_losses, training_errors, epoch_times, validation_errors
     """
+    # Loss function and optimizer
     criterion = nn.CrossEntropyLoss()
-    alpha = 0.003  # Learning rate
+
+    # Learning rate
+    alpha = 0.001
+
+    # Optimizer. Adam seems to work well for both activations.
     optimizer = optim.Adam(model.parameters(), lr=alpha)
     
+    # Lists for tracking metrics
     training_losses = []
     training_errors = []
     validation_errors = []
@@ -215,10 +203,11 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
     
     print(f"\n" + "="*70)
     print(f"TRAINING {model_name.upper()} MODEL")
-    print(f"Target: Stop when training error ≤ {target_error*100}%")
+    print(f"Target: Training Error <= {target_error*100}%")
     print(f"Optimizer: Adam (lr={alpha})")
     print("="*70)
-    
+
+    # Training loop
     for epoch in range(max_epochs):
         # Start timing this epoch
         epoch_start_time = time.time()
@@ -260,7 +249,11 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
         train_accuracy = correct_train / total_train
         train_error = 1 - train_accuracy
         
-        # Validation phase with progress bar
+        # End timing this epoch (ONLY training time, not validation!)
+        epoch_end_time = time.time()
+        epoch_duration = epoch_end_time - epoch_start_time
+        
+        # Validation phase with progress bar (AFTER timing)
         model.eval()
         correct_val = 0
         total_val = 0
@@ -268,7 +261,8 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
         # Create progress bar for validation batches
         val_pbar = tqdm(valid_loader, desc=f'Epoch {epoch+1:3d}/{max_epochs} - Validation', 
                        leave=False, ncols=100, colour='green')
-        
+
+        # Disable gradient calculation for validation
         with torch.no_grad():
             for data, target in val_pbar:
                 data, target = data.to(device), target.to(device)
@@ -284,10 +278,6 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
         val_accuracy = correct_val / total_val
         val_error = 1 - val_accuracy
         
-        # End timing this epoch
-        epoch_end_time = time.time()
-        epoch_duration = epoch_end_time - epoch_start_time
-        
         # Store metrics
         training_losses.append(avg_train_loss)
         training_errors.append(train_error)
@@ -300,11 +290,6 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
               f"Valid: {val_error*100:5.2f}% | "
               f"Loss: {avg_train_loss:.4f} | "
               f"Time: {epoch_duration:5.2f}s")
-        
-        # Show progress towards target every 5 epochs
-        if epoch == 0 or (epoch + 1) % 5 == 0:
-            progress = ((target_error - train_error) / target_error * 100) if target_error > 0 else 0
-            print(f"   Progress: {progress:+5.1f}% to target ({target_error*100:.1f}%)")
         
         # Check stopping condition
         if train_error <= target_error:
@@ -328,7 +313,7 @@ def train_model(model, train_loader, valid_loader, model_name, device, max_epoch
 
 
 def create_comparison_plots(relu_results, tanh_results, save_path='results/activation_comparison.png'):
-    """Create comparative analysis plots as required by assignment"""
+    """Create comparative analysis plots to analyze ReLU vs Tanh performance"""
     
     relu_losses, relu_errors, relu_times, relu_val_errors = relu_results
     tanh_losses, tanh_errors, tanh_times, tanh_val_errors = tanh_results
@@ -337,7 +322,7 @@ def create_comparison_plots(relu_results, tanh_results, save_path='results/activ
     
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
     
-    # 1. REQUIRED: Epoch Times Comparison (x=epoch, y=time in seconds)
+    # Epoch Times Comparison (x=epoch, y=time in seconds)
     ax1.plot(range(1, len(relu_times) + 1), relu_times, 'b-o', label='ReLU', linewidth=2, markersize=4)
     ax1.plot(range(1, len(tanh_times) + 1), tanh_times, 'r-s', label='Tanh', linewidth=2, markersize=4)
     ax1.set_xlabel('Epoch Number')
@@ -345,8 +330,8 @@ def create_comparison_plots(relu_results, tanh_results, save_path='results/activ
     ax1.set_title('Training Time per Epoch: ReLU vs Tanh')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    
-    # 2. Training Error Comparison
+
+    # Training Error Comparison
     ax2.plot(range(1, len(relu_errors) + 1), [e*100 for e in relu_errors], 'b-o', label='ReLU', linewidth=2, markersize=4)
     ax2.plot(range(1, len(tanh_errors) + 1), [e*100 for e in tanh_errors], 'r-s', label='Tanh', linewidth=2, markersize=4)
     ax2.axhline(y=25, color='k', linestyle='--', alpha=0.7, label='Target (25%)')
@@ -355,8 +340,8 @@ def create_comparison_plots(relu_results, tanh_results, save_path='results/activ
     ax2.set_title('Training Error: ReLU vs Tanh')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
-    
-    # 3. Training Loss Comparison
+
+    # Training Loss Comparison (not required)
     ax3.plot(range(1, len(relu_losses) + 1), relu_losses, 'b-o', label='ReLU', linewidth=2, markersize=4)
     ax3.plot(range(1, len(tanh_losses) + 1), tanh_losses, 'r-s', label='Tanh', linewidth=2, markersize=4)
     ax3.set_xlabel('Epoch Number')
@@ -416,24 +401,96 @@ def print_summary_statistics(relu_results, tanh_results):
     print(f"   ReLU vs Tanh final validation error: {relu_val_errors[-1]*100:.2f}% vs {tanh_val_errors[-1]*100:.2f}%")
 
 
+def evaluate_test_set(model_relu, model_tanh, test_loader, device):
+    """Evaluate both models on the test set for final performance comparison"""
+    print("\n" + "="*80)
+    print("FINAL TEST SET EVALUATION")
+    print("="*80)
+    
+    def evaluate_model(model, model_name):
+        model.eval()
+        correct = 0
+        total = 0
+        test_loss = 0.0
+        criterion = nn.CrossEntropyLoss()
+        
+        print(f"\nEvaluating {model_name} model on test set...")
+        
+        # Create progress bar for test evaluation
+        test_pbar = tqdm(test_loader, desc=f'{model_name} Test Evaluation', 
+                        leave=False, ncols=100, colour='yellow')
+        
+        with torch.no_grad():
+            for data, target in test_pbar:
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                loss = criterion(output, target)
+                test_loss += loss.item()
+                
+                pred = output.argmax(dim=1, keepdim=True)
+                correct += pred.eq(target.view_as(pred)).sum().item()
+                total += target.size(0)
+                
+                # Update progress bar
+                current_acc = correct / total * 100
+                test_pbar.set_postfix({'Acc': f'{current_acc:.1f}%'})
+        
+        test_accuracy = correct / total
+        test_error = 1 - test_accuracy
+        avg_test_loss = test_loss / len(test_loader)
+        
+        print(f"{model_name} Test Results:")
+        print(f"   Test Accuracy: {test_accuracy*100:.2f}%")
+        print(f"   Test Error: {test_error*100:.2f}%")
+        print(f"   Test Loss: {avg_test_loss:.4f}")
+        print(f"   Correct/Total: {correct}/{total}")
+        
+        return test_accuracy, test_error, avg_test_loss
+    
+    # Evaluate both models
+    relu_acc, relu_err, relu_loss = evaluate_model(model_relu, "ReLU")
+    tanh_acc, tanh_err, tanh_loss = evaluate_model(model_tanh, "Tanh")
+    
+    # Final comparison
+    print(f"\n" + "="*60)
+    print("FINAL TEST SET COMPARISON")
+    print("="*60)
+    print(f"ReLU Test Performance:")
+    print(f"   Accuracy: {relu_acc*100:.2f}%  |  Error: {relu_err*100:.2f}%  |  Loss: {relu_loss:.4f}")
+    print(f"Tanh Test Performance:")
+    print(f"   Accuracy: {tanh_acc*100:.2f}%  |  Error: {tanh_err*100:.2f}%  |  Loss: {tanh_loss:.4f}")
+    
+    # Determine winner
+    if relu_acc > tanh_acc:
+        winner = "ReLU"
+        acc_diff = (relu_acc - tanh_acc) * 100
+    else:
+        winner = "Tanh"
+        acc_diff = (tanh_acc - relu_acc) * 100
+    
+    print(f"\nFINAL WINNER: {winner} by {acc_diff:.2f} percentage points!")
+    
+    return (relu_acc, relu_err, relu_loss), (tanh_acc, tanh_err, tanh_loss)
+
+
 def main():
     """Main execution function"""
-    print("Starting CS898BD Assignment 2 - Activation Function Experiments")
+    print("Starting CS898BD Assignment 2 - Activation Function Experiments with CIFAR-10")
     print("="*80)
     
     # Setup environment
     device = setup_environment()
     
-    # Load dataset
-    train_data, test_data, valid_data, selected_classes = load_dataset()
+    # Load CIFAR-10 dataset
+    train_dataset, test_dataset, cifar10_classes = load_cifar10_dataset()
     
     # Create data loaders
     train_loader, test_loader, valid_loader = create_data_loaders(
-        train_data, test_data, valid_data, batch_size=64
+        train_dataset, test_dataset, batch_size=64
     )
     
     # Create models
-    model_relu, model_tanh = create_models(device, num_classes=len(selected_classes))
+    model_relu, model_tanh = create_models(device, num_classes=len(cifar10_classes))
     
     # Train ReLU model
     print("\n" + "="*80)
@@ -457,8 +514,11 @@ def main():
     # Print summary statistics
     print_summary_statistics(relu_results, tanh_results)
     
+    # Evaluate both models on test set for final performance (just because)
+    _ = evaluate_test_set(model_relu, model_tanh, test_loader, device)
+    
     print(f"\nDONE!")
-    print(f"  Results saved to: results/activation_comparison.png")
+    print(f"  Training results saved to: results/activation_comparison.png")
 
 if __name__ == "__main__":
     main()
