@@ -52,6 +52,13 @@ This repository contains the implementation and experiments for CS898BD Assignme
 - Other dependencies (to be updated)
 
 ## Usage
+Before running the notebooks, make sure your environment is set up.
+
+Quickstart from the project root directory:
+- **Virtual Environment Setup**: Run `python3 -m venv .venv`
+- **Source Environment**: Run `source .venv/bin/activate`
+- **Requirements Installation**: Run `pip3 install -r requirements.txt` to install the project requirements.
+
 The project is organized as interactive Jupyter notebooks:
 1. **Dataset Preparation**: Run `01_dataset_preparation.ipynb` to download and process Tiny ImageNet
 2. **Activation Experiments**: Run `02_activation_experiments.ipynb` for CIFAR-10 CNN comparisons

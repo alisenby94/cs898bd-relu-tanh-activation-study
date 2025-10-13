@@ -1,3 +1,9 @@
+# Dataset files
+data/*
+
+# Models
+models/*
+
 # Python
 __pycache__/
 *.py[cod]
