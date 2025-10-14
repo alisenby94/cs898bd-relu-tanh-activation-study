@@ -2,7 +2,7 @@
 
 ## Disclosure
 
-This README was initially generated using GitHub Copilot to provide a basic project structure and overview during Repository initialization. This is a temporary placeholder that will be replaced with a comprehensive, manually-written README upon project completion.
+This README was initially generated using GitHub Copilot to provide a basic project structure and overview during Repository initialization. It has since been modified in order to provide a more accurate summary and layout of the project. Some AI generated elements are still present in the final README.
 
 ## Assignment 2 - Deep Learning Spring 2025
 
@@ -25,47 +25,37 @@ This repository contains the implementation and experiments for CS898BD Assignme
 
 ## Repository Structure
 ```
-├── notebooks/                              # Jupyter notebooks for analysis and experiments
-│   ├── 01_dataset_preparation.ipynb        # Question 1: Tiny ImageNet processing
-│   └── 02_activation_experiments.ipynb     # Question 2: ReLU vs Tanh comparison
 ├── src/                                    # Source code modules
-│   ├── __init__.py                         # Package initialization
-│   ├── utils.py                            # Helper functions and utilities
-│   ├── data_processing.py                  # Data loading and preprocessing functions
-│   └── models.py                           # Neural network model definitions
+│   ├── 01_dataset_preparation.py           # Question 1: Tiny ImageNet processing
+│   └── 02_activation_experiments.py        # Question 2: ReLU vs Tanh comparison
 ├── data/                                   # Dataset storage
-│   ├── raw/                                # Original datasets
 │   ├── processed/                          # Preprocessed datasets
-│   └── tiny_imagenet/                      # Custom 100-class subset
-├── models/                                 # Saved model checkpoints
+│   └── cifar-10*                           # Raw CIFAR-10 dataset data
 ├── results/                                # Generated plots and analysis outputs
-└── report/                                 # Final report and documentation
+└── report/                                 # Final report
 ```
 
 ## Requirements
 - Python 3.x
-- Jupyter Notebook/JupyterLab
-- PyTorch or TensorFlow
-- NumPy, Pandas
-- Matplotlib, Seaborn
-- scikit-learn
-- Other dependencies (to be updated)
+- PyTorch
+- NumPy
+- Matplotlib
+- Datasets
 
 ## Usage
-Before running the notebooks, make sure your environment is set up.
+Ensure your environment is set up prior to execution.
 
 Quickstart from the project root directory:
 - **Virtual Environment Setup**: Run `python3 -m venv .venv`
 - **Source Environment**: Run `source .venv/bin/activate`
 - **Requirements Installation**: Run `pip3 install -r requirements.txt` to install the project requirements.
 
-The project is organized as interactive Jupyter notebooks:
-1. **Dataset Preparation**: Run `01_dataset_preparation.ipynb` to download and process Tiny ImageNet
-2. **Activation Experiments**: Run `02_activation_experiments.ipynb` for CIFAR-10 CNN comparisons
-3. Each notebook contains detailed explanations, code, and analysis in a step-by-step format
+The project is organized as two python source files in the src directory:
+1. **Dataset Preparation**: Run `01_dataset_preparation.py` to download and process Tiny ImageNet
+2. **Activation Experiments**: Run `02_activation_experiments.py` for CIFAR-10 CNN comparisons
+3. Each program is commented thoroughly with explanations of the steps.
 
 ## Results
-*Results and analysis will be updated upon completion*
+The ReLU activation function was significantly easier to train than Tanh. It became clear after a few attempts that the Tanh vanishing gradient was extremely hard to overcome in order to train the model to an error of less than 25%. Batch normalization after each convolutional level helped to reduce this effect, finally the maxpooling applied to the final convolutional output before the dense layers appeared to help it prioritize the important features -- allowing it to converge faster.
 
----
-**Due Date:** October 15, 2025
+See `report/` for a more comprehensive summary of the research.

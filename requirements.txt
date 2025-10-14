@@ -3,4 +3,3 @@ torchvision
 datasets
 matplotlib
 numpy
-ipywidgets

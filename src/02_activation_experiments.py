@@ -7,7 +7,6 @@ on the CIFAR-10 dataset. The model trains until reaching ≤25% training error a
 comparative analysis plots.
 
 Author: Andrew Lisenby
-Date: October 2025
 """
 
 import torch
