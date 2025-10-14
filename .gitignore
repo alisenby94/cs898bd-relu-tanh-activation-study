@@ -1,3 +1,9 @@
+# Dataset files
+data/*
+
+# Models
+models/*
+
 # Python
 __pycache__/
 *.py[cod]
@@ -85,9 +91,9 @@ models/*.h5
 models/*.hdf5
 
 # Results and logs
-results/*.png
-results/*.jpg
-results/*.pdf
+# results/*.png
+# results/*.jpg
+# results/*.pdf
 logs/
 *.log
 
