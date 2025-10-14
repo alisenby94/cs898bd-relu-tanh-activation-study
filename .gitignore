@@ -104,8 +104,8 @@ tmp/
 
 # Academic - ignore submission files
 submission/
-*.pdf
-report/*.pdf
+# *.pdf
+# report/*.pdf
 
 # System files
 *.swp
